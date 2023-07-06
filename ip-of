@@ -1,0 +1,7 @@
+#!/usr/bin/bash
+
+network=${2:-192.168.0.0/24}
+name=$1
+pattern='([[:digit:]]*\.)+[[:digit:]]*'
+
+nmap -sP $network | grep $name | egrep -o $pattern

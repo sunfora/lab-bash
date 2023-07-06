@@ -1,0 +1,2 @@
+#!/usr/bin/bash
+tar c $1 | socat - TCP:$(./ip-of $2):$3 

@@ -1,0 +1,35 @@
+#!/usr/bin/bash
+SOURCE_DIR=$(dirname $(realpath ${BASH_SOURCE:-0}))
+eval source `find $SOURCE_DIR -name back.sh`
+
+restore="$HOME/restore"
+last=$(last_backup "$HOME")
+
+[[ -z $last ]] && {
+    echo "Error: no backups"
+    exit 1
+}
+
+actual="$HOME/$last" 
+
+[[ -e $HOME/restore ]] && {
+    echo "Error: $HOME/restore exists"
+    exit 1
+}
+
+mkdir -v "$restore" || {
+    exit 1
+}
+
+cp -v -a -- "$actual/." "$restore" || {
+    exit 1
+}
+
+# delete garbage
+find "$restore"                    \
+    -regextype egrep               \
+    -regex ".*\.$GREP_DATE_FORMAT" \
+    -not -type d                   \
+    -exec rm -v -- {} \;
+
+exit $?

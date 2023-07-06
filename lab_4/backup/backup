@@ -1,0 +1,158 @@
+#!/usr/bin/bash
+SOURCE_DIR=$(dirname $(realpath ${BASH_SOURCE:-0}))
+eval source `find $SOURCE_DIR -name back.sh`
+
+TIME=$(date)
+
+current_formated () {
+   local format="$1"
+   date -d "$TIME" $format
+}
+
+days_difference () {
+    #time in seconds
+    local x=$(date -d $1 +%s) 
+    local y=$(date -d $2 +%s)
+
+    local seconds_in_day=$((60 * 60 * 24)) 
+    echo $(( ($x - $y) / $seconds_in_day )) 
+}
+
+need_new_backup () {
+    local home="$1"
+
+    local current=$(current_formated +$DATE_DATE_FORMAT)
+    local previous=$(last_backup_time "$home")
+
+    # no backups at all
+    [[ -z $previous ]] && {
+        return 0
+    }
+
+    # or 7 days passed
+    return $(( $(days_difference $current $previous) < 7 ))
+}
+
+new_backup () {
+    local source="$1"
+    local destin="$2"
+    mkdir -v -- "$destin" || {
+	return 1
+    }
+    cp -v -a -- "$source/." "$destin" || {
+        return 1
+    }
+}
+
+eq_size () {
+    local bytes_1=$(stat -c %s -- "$1")
+    local bytes_2=$(stat -c %s -- "$2")
+    return $(( $bytes_1 != $bytes_2 ))
+}
+
+# modification
+eq_content () {
+    eq_size "$1" "$2" && cmp -s -- "$1" "$2"
+    return $?
+}
+
+replace_file () {
+    local relative_path="$1"
+    local source="$2"
+    local destin="$3"
+    local extension="$4"
+
+    local relative_dir=$(dirname "$relative_path")
+
+    local dest_dir="$destin/$relative_dir"
+    local sorc_dir="$source/$relative_dir"
+
+    local dest_path="$destin/$relative_path"
+    local sorc_path="$source/$relative_path"
+
+    # exists file with the name of directory
+    [[ -e $dest_dir ]] && [[ ! -d $dest_dir ]] && {
+        mv -v -- "$dest_dir" "$dest_dir.$extension" || {
+	    return 1
+        }
+    }
+
+    # target directory does not exist
+    [[ ! -e $dest_dir ]] && { 
+        mkdir -v -p "$dest_dir" || {
+	    return 1
+        }
+    }
+
+    # file exists and is of different content 
+    [[ -e $dest_path ]] && ! eq_content "$dest_path" "$sorc_path" && {
+        mv -v -- "$dest_path" "$dest_path.$extension" || {
+	    return 1
+        }
+    } 
+    
+    # file can be copied
+    [[ ! -e $dest_path ]] && {
+        cp -v -- "$sorc_path" "$dest_path" || {
+	    return 1
+        }
+    } 
+}
+
+to () {
+# replace pattern with lines from stdin
+# and run command multiple times
+    local pattern="$1"; shift
+    local cmd="$@"
+    while read 
+    do
+        eval ${cmd//"$pattern"/"$REPLY"}
+    done
+}
+
+relative_paths_from () {
+    find "$1"           \
+         -mindepth 1    \
+         -not -type d   \
+         -printf '%P\n' 
+}
+
+update_backup () {
+    local source="$1"
+    local destin="$2"
+    local extension="$3"
+    relative_paths_from "$source" | to {} \
+	    replace_file {} "$source" "$destin" "$extension" 
+}
+
+name_for_backup () { 
+    if (( $1 )) 
+    then 
+	last_backup "$home"
+    else
+        current_formated +$DATE_BACKUP_FORMAT 
+    fi
+}
+
+do_backup () {
+    local home="$1"
+    local source="$home/source"
+
+    need_new_backup "$home"
+    local update=$?
+
+    local destin="$home/$(name_for_backup $update)"
+
+    if (( update )) 
+    then
+        echo "updating backup $destin at $TIME"
+        local extension=$(current_formated +$DATE_DATE_FORMAT)
+        update_backup "$source" "$destin" "$extension" 
+    else
+        echo "creating backup $destin at $TIME"
+        new_backup "$source" "$destin"
+    fi
+}
+
+do_backup "$HOME" | tee --append "$HOME/backup-report"
+

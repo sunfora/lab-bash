@@ -1,0 +1,18 @@
+Trash program moves files temporary to trash bin.
+
+Implementation notes:
+
+Actual bin is created at $HOME/.trash of form
+.trash/
+ - links/*
+ - lock
+ - log
+ - last
+
+Links catalog is used for storing hard links.
+
+File named "lock" must be used via flock whenever any trash modification is needed.
+File named "log" is of form "id path name", where:
+ - id is a hexadecimal number representing link in links/
+ - path is base64 encoded path of the original file
+ - name is base64 encoded name of the original file

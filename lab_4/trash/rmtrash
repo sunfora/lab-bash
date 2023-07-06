@@ -1,0 +1,23 @@
+#!/usr/bin/bash
+SOURCE_DIR=$(dirname $(realpath ${BASH_SOURCE:-0}))
+eval source `find $SOURCE_DIR -name methods.sh`
+eval source `find $SOURCE_DIR -name mutex.sh`
+
+(( 1 == ${#} )) || {
+    echo "Unexpected number of arguments (${#}) instead of 1" > /dev/stderr
+    exit 1
+}
+
+# file must also exist 
+if [[ ! ( -e "./$1" ) ]]
+then 
+   echo "Unnable to locate file '${1@Q}' in current directory" > /dev/stderr
+   exit 1
+fi
+
+this=`trash:open $HOME` || exit 1
+with:mutex "$this/lock" <(
+    sync:with || exit 1
+    trash:add_file "$this" "`pwd`" "$1"
+)
+

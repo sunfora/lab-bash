@@ -1,0 +1,56 @@
+#!/usr/bin/bash
+SOURCE_DIR=$(dirname $(realpath ${BASH_SOURCE:-0}))
+eval source `find $SOURCE_DIR -name methods.sh`
+eval source `find $SOURCE_DIR -name mutex.sh`
+
+(( 1 == ${#} )) || {
+    echo "Unexpected number of arguments (${#}) instead of 1" > /dev/stderr
+    exit 1
+}
+
+this=`trash:open $HOME` || exit 1  
+name=`trash:encode "$1"`
+
+yes_to_continue () (
+    select yn in "Yes" "No"
+    do
+ 	 case $yn in
+ 	     Yes ) return 0 ;; 
+	     No ) return 1 ;;
+         esac
+    done
+)
+
+interactive_restore () (
+   local id="$1"
+   local path=`trash:decode $2`
+   local name=`trash:decode $3`
+
+   # interactive, so then all output goes to stderr
+   exec 1>/dev/stderr
+   # read from actual stdin
+   exec 0</proc/$$/fd/0
+
+   echo "record id: $id"
+   local full="$path/$name"
+
+   echo "found file ${full@Q}"
+
+   echo "restore?"
+   yes_to_continue || return 1
+
+   trash:restore_file "$id" "$path" "$name" || return 1
+)
+
+to () (
+    while read
+    do
+	eval "$@ $REPLY"
+    done
+)
+
+with:mutex "$this/lock" <(
+    sync:with || exit 1
+    trash:actual "$this" | grep "$name$" | to interactive_restore 
+)
+
